@@ -17,6 +17,8 @@ import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorUtils;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
+import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
+import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector.PrimitiveCategory;
 import org.apache.hadoop.hive.serde2.typeinfo.PrimitiveTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
@@ -30,10 +32,12 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 
 /**
- * To be used with: org.apache.hadoop.mapreduce.lib.input.SequenceFileAsBinaryInputFormat
+ * To be used with:
+ * org.apache.hadoop.mapreduce.lib.input.SequenceFileAsBinaryInputFormat
  * 
  * @author ntroutman
  * 
@@ -51,39 +55,64 @@ public class SimpleWritableSerde implements Deserializer {
 		String columnTypeProperty = tbl.getProperty("columns.types");
 
 		// column names are comma separated
-		ArrayList<String> columnNames;
+		List<String> columnNames;
 		if (columnNameProperty.length() == 0) {
 			columnNames = Lists.newArrayList();
 		} else {
-			columnNames = (ArrayList<String>) Arrays.asList(columnNameProperty.split(","));
+			columnNames = Lists.newArrayList(columnNameProperty.split(","));
 		}
 
-		// get the column types using the utility functions
-		ArrayList<TypeInfo> columnTypes;
+		// the column types to return to hive that represent the table, not the
+		// underlying data
+		ArrayList<TypeInfo> tableColumnTypes;
+		
+		// an array to hold the values for each row and populate each
+		// column with the appropriate writable
+		row = Lists.newArrayListWithCapacity(columnNames.size());
 		if (columnTypeProperty.length() == 0) {
-			columnTypes = Lists.newArrayList();
+			tableColumnTypes = Lists.newArrayList();
 		} else {
-			columnTypes = TypeInfoUtils.getTypeInfosFromTypeString(columnTypeProperty);
+			List<TypeInfo> rawColumnTypes = TypeInfoUtils
+					.getTypeInfosFromTypeString(columnTypeProperty);
+			tableColumnTypes = Lists.newArrayListWithCapacity(rawColumnTypes.size());
+			for (int i = 0; i < rawColumnTypes.size(); i++) {
+				TypeInfo rawColumn = rawColumnTypes.get(i);
+				// bytes,aka tinyint, are actually treated as var ints
+				if (isByte(rawColumn)) {
+					tableColumnTypes.add(TypeInfoFactory.intTypeInfo);
+					row.add(new VarIntWritable());
+				} else {
+					tableColumnTypes.add(rawColumn);
+					row.add(getWritable(rawColumn));
+				}
+			}
 		}
-		assert (columnNames.size() == columnTypes.size());
+		assert (columnNames.size() == tableColumnTypes.size());
 
 		// Create row struct type info and object inspector from the column
 		// names and types
-		rowTypeInfo = TypeInfoFactory.getStructTypeInfo(columnNames, columnTypes);
+		rowTypeInfo = TypeInfoFactory.getStructTypeInfo(columnNames, tableColumnTypes);
 		rowObjectInspector = (StructObjectInspector) TypeInfoUtils
-				.getStandardJavaObjectInspectorFromTypeInfo(rowTypeInfo);
+				.getStandardWritableObjectInspectorFromTypeInfo(rowTypeInfo);
 
-		// Create an array to hold the values for each row and populate each
-		// column with the appropriate writable
-		row = Lists.newArrayListWithCapacity(columnNames.size());
-		for (int i = 0; i < columnNames.size(); i++) {
-			row.add(getWritable(columnTypes.get(i)));
+	}
+
+	private boolean isByte(TypeInfo type) {
+		if (type.getCategory() == Category.PRIMITIVE) {
+			PrimitiveTypeInfo ptype = (PrimitiveTypeInfo) type;
+			return ptype.getPrimitiveCategory() == PrimitiveCategory.BYTE;
 		}
+		return false;
+	}
+
+	private void debug(String string) {
+		System.out.println(string);
 	}
 
 	@Override
 	public Object deserialize(Writable blob) throws SerDeException {
 		byte[] bytes = ((BytesWritable) blob).getBytes();
+		debug("Deser: " + Arrays.toString(bytes));
 		DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
 		for (int i = 0; i < row.size(); i++) {
 			try {
@@ -109,38 +138,10 @@ public class SimpleWritableSerde implements Deserializer {
 		switch (type.getCategory()) {
 		case PRIMITIVE: {
 			PrimitiveTypeInfo ptype = (PrimitiveTypeInfo) type;
-			
-			switch (ptype.getPrimitiveCategory()) {
-			case VOID: {
-				return null;
-			}
-			case BOOLEAN: {
-				return new BooleanWritable();
-			}
-			case BYTE: {
-				return new VarIntWritable();
-			}
-			case SHORT: {
-				return new ShortWritable();
-			}
-			case INT: {
-				return new IntWritable();
-			}
-			case LONG: {
-				return new LongWritable();
-			}
-			case FLOAT: {
-				return new FloatWritable();
-			}
-			case DOUBLE: {
-				return new DoubleWritable();
-			}
-			case STRING: {
-				return new Text();
-			}
-			default: {
-				throw new RuntimeException("Unrecognized type: " + ptype.getPrimitiveCategory());
-			}
+			try {
+				return (Writable) ptype.getPrimitiveWritableClass().newInstance();
+			} catch (Exception e) {
+				throw new SerDeException("Unable to create primitive writable: " + type);
 			}
 		}
 		case LIST:
