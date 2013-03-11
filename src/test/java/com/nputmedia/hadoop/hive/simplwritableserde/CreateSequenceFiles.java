@@ -7,7 +7,6 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.SequenceFile;
@@ -28,16 +27,16 @@ public class CreateSequenceFiles {
 		@Override
 		public void write(DataOutput out) throws IOException {
 			WritableUtils.writeVInt(out, val);
-			
+
 			out.writeShort(val);
 			out.writeInt(val * 100);
 			out.writeLong(val * 10000);
 
 			out.writeFloat(val * 1.25f);
-			out.writeDouble(val * 1.5);
-			
+			out.writeDouble(val * 1.5d);
+
 			out.writeBoolean(val % 2 == 0);
-			
+
 			Text.writeString(out, "txt" + val);
 		}
 
@@ -46,7 +45,51 @@ public class CreateSequenceFiles {
 			// TODO Auto-generated method stub
 
 		}
+	}
 
+	public static class ListIntTestWritable implements Writable {
+		private int val;
+
+		public ListIntTestWritable(int val) {
+			this.val = val;
+		}
+
+		@Override
+		public void write(DataOutput out) throws IOException {
+			WritableUtils.writeVInt(out, val);
+			for (int i = 0; i < val; i++) {
+				out.writeInt(val);
+			}
+		}
+
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			// TODO Auto-generated method stub
+			throw new RuntimeException("Not implemented yet.");
+		}
+	}
+
+	public static class SimpleMapTestWritable implements Writable {
+		private int val;
+
+		public SimpleMapTestWritable(int val) {
+			this.val = val;
+		}
+
+		@Override
+		public void write(DataOutput out) throws IOException {
+			WritableUtils.writeVInt(out, val);
+			for (int i = 0; i < val; i++) {
+				Text.writeString(out, "key" + val + "_" + i);
+				out.writeInt(val);
+			}
+		}
+
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			// TODO Auto-generated method stub
+			throw new RuntimeException("Not implemented yet.");
+		}
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -63,10 +106,22 @@ public class CreateSequenceFiles {
 			writer.append(NullWritable.get(), new Text("" + i));
 		}
 		writer.close();
-		
+
 		writer = createWriter(args[0], "primative_test.seq", PrimativeTestWritable.class);
 		for (int i = 0; i < 10; i++) {
 			writer.append(NullWritable.get(), new PrimativeTestWritable(i));
+		}
+		writer.close();
+
+		writer = createWriter(args[0], "list_int_test.seq", ListIntTestWritable.class);
+		for (int i = 1; i <= 10; i++) {
+			writer.append(NullWritable.get(), new ListIntTestWritable(i));
+		}
+		writer.close();
+
+		writer = createWriter(args[0], "simple_map_test.seq", SimpleMapTestWritable.class);
+		for (int i = 1; i <= 10; i++) {
+			writer.append(NullWritable.get(), new SimpleMapTestWritable(i));
 		}
 		writer.close();
 	}

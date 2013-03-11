@@ -7,13 +7,20 @@ import java.io.IOException;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 
-public class VarIntWritable implements Writable{
+/**
+ * Writable that uses varints
+ * 
+ * @author ntroutm
+ * 
+ */
+public class VarIntWritable implements Writable {
 	private int value;
 
 	public VarIntWritable() {
 		// do nothing
 		this.value = 0;
 	}
+
 	public VarIntWritable(int value) {
 		this.value = value;
 	}

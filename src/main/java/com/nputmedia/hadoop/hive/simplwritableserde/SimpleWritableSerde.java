@@ -6,34 +6,30 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.serde2.Deserializer;
 import org.apache.hadoop.hive.serde2.SerDeException;
 import org.apache.hadoop.hive.serde2.SerDeStats;
-import org.apache.hadoop.hive.serde2.io.ShortWritable;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorUtils;
-import org.apache.hadoop.hive.serde2.objectinspector.StructField;
-import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
 import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector.PrimitiveCategory;
+import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
+import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.PrimitiveTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
-import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
-import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.FloatWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableUtils;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 /**
  * To be used with:
@@ -46,7 +42,8 @@ public class SimpleWritableSerde implements Deserializer {
 
 	private TypeInfo rowTypeInfo;
 	private StructObjectInspector rowObjectInspector;
-	private ArrayList<Writable> row;
+	private ArrayList<Object> row;
+	private List<TypeInfo> rawColumnTypes;
 
 	@Override
 	public void initialize(Configuration conf, Properties tbl) throws SerDeException {
@@ -65,25 +62,21 @@ public class SimpleWritableSerde implements Deserializer {
 		// the column types to return to hive that represent the table, not the
 		// underlying data
 		ArrayList<TypeInfo> tableColumnTypes;
-		
+
 		// an array to hold the values for each row and populate each
 		// column with the appropriate writable
-		row = Lists.newArrayListWithCapacity(columnNames.size());
 		if (columnTypeProperty.length() == 0) {
 			tableColumnTypes = Lists.newArrayList();
 		} else {
-			List<TypeInfo> rawColumnTypes = TypeInfoUtils
-					.getTypeInfosFromTypeString(columnTypeProperty);
+			rawColumnTypes = TypeInfoUtils.getTypeInfosFromTypeString(columnTypeProperty);
 			tableColumnTypes = Lists.newArrayListWithCapacity(rawColumnTypes.size());
 			for (int i = 0; i < rawColumnTypes.size(); i++) {
 				TypeInfo rawColumn = rawColumnTypes.get(i);
 				// bytes,aka tinyint, are actually treated as var ints
 				if (isByte(rawColumn)) {
 					tableColumnTypes.add(TypeInfoFactory.intTypeInfo);
-					row.add(new VarIntWritable());
 				} else {
 					tableColumnTypes.add(rawColumn);
-					row.add(getWritable(rawColumn));
 				}
 			}
 		}
@@ -93,7 +86,11 @@ public class SimpleWritableSerde implements Deserializer {
 		// names and types
 		rowTypeInfo = TypeInfoFactory.getStructTypeInfo(columnNames, tableColumnTypes);
 		rowObjectInspector = (StructObjectInspector) TypeInfoUtils
-				.getStandardWritableObjectInspectorFromTypeInfo(rowTypeInfo);
+				.getStandardJavaObjectInspectorFromTypeInfo(rowTypeInfo);
+		row = Lists.newArrayListWithCapacity(columnNames.size());
+		for (int i = 0; i < rawColumnTypes.size(); i++) {
+			row.add(null);
+		}
 
 	}
 
@@ -116,7 +113,7 @@ public class SimpleWritableSerde implements Deserializer {
 		DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
 		for (int i = 0; i < row.size(); i++) {
 			try {
-				row.get(i).readFields(in);
+				row.set(i, readField(rawColumnTypes.get(i), in));
 			} catch (IOException e) {
 				throw new SerDeException(e);
 			}
@@ -134,24 +131,65 @@ public class SimpleWritableSerde implements Deserializer {
 		return null;
 	}
 
-	private Writable getWritable(TypeInfo type) throws SerDeException {
+	private Object readField(TypeInfo type, DataInputStream in) throws SerDeException, IOException {
 		switch (type.getCategory()) {
 		case PRIMITIVE: {
 			PrimitiveTypeInfo ptype = (PrimitiveTypeInfo) type;
-			try {
-				return (Writable) ptype.getPrimitiveWritableClass().newInstance();
-			} catch (Exception e) {
-				throw new SerDeException("Unable to create primitive writable: " + type);
+			switch (ptype.getPrimitiveCategory()) {
+			case BOOLEAN:
+				return in.readBoolean();
+			case BYTE:
+				// bytes are var ints
+				return WritableUtils.readVInt(in);
+			case SHORT:
+				return in.readShort();
+			case INT:
+				return in.readInt();
+			case LONG:
+				return in.readLong();
+			case FLOAT:
+				return in.readFloat();
+			case DOUBLE:
+				return in.readDouble();
+			case STRING:
+				return Text.readString(in);
+			default:
+				throw new SerDeException("Unsupported type by SimpleWritable: " + ptype);
 			}
 		}
 		case LIST:
+			return readList((ListTypeInfo) type, in);
 		case MAP:
-		case STRUCT: {
-			throw new SerDeException("List, Map and Struct not supported by SimpleWritable");
-		}
+			return readMap((MapTypeInfo) type, in);
+		case STRUCT:
+			throw new SerDeException("Struct not supported by SimpleWritable");
 		default: {
 			throw new RuntimeException("Unrecognized type: " + type.getCategory());
 		}
 		}
+	}
+
+	private Object readList(ListTypeInfo type, DataInputStream in) throws SerDeException,
+			IOException {
+		int count = WritableUtils.readVInt(in);
+		List<Object> list = Lists.newArrayListWithCapacity(count);
+		TypeInfo elementType = type.getListElementTypeInfo();
+		for (int i = 0; i < count; i++) {
+			list.add(readField(elementType, in));
+		}
+		return list;
+	}
+
+	private Object readMap(MapTypeInfo type, DataInputStream in) throws SerDeException, IOException {
+		int count = WritableUtils.readVInt(in);
+		Map<Object, Object> map = Maps.newHashMapWithExpectedSize(count);
+		TypeInfo keyType = type.getMapKeyTypeInfo();
+		TypeInfo valueType = type.getMapValueTypeInfo();
+		for (int i = 0; i < count; i++) {
+			Object key = readField(keyType, in);
+			Object value = readField(valueType, in);
+			map.put(key, value);
+		}
+		return map;
 	}
 }
