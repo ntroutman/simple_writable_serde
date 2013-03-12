@@ -134,15 +134,14 @@ public class CreateSequenceFiles {
 			// write out a struct with a two primative columns and one map
 			Text.writeString(out, "f1_" + val);
 			out.writeDouble(val * 1.5d);
-			// map
+			// map<varint, struct<txt,int>>
 			WritableUtils.writeVInt(out, 3);
 			for (int i = 0; i < 3; i++) {
-				WritableUtils.writeVInt(out, 100 + val);
-				WritableUtils.writeVInt(out, 3);
-				for (int j = 1; j <= 3; j++) {
-					Text.writeString(out, "inner" + j);
-					out.writeInt(j * j);
-				}
+				// key
+				WritableUtils.writeVInt(out, 100 + i);
+				// value
+				Text.writeString(out, "inner" + i);
+				out.writeInt(i * i);
 			}
 		}
 
@@ -193,9 +192,10 @@ public class CreateSequenceFiles {
 		writer.close();
 
 		writer = createWriter(args[0], "full_test.seq", FullTestWritable.class);
-		for (int i = 1; i <= 10; i++) {
-			writer.append(NullWritable.get(), new FullTestWritable(i));
-		}
+		// for (int i = 1; i <= 10; i++) {
+		// writer.append(NullWritable.get(), new FullTestWritable(i));
+		// }
+		writer.append(NullWritable.get(), new FullTestWritable(2));
 		writer.close();
 	}
 

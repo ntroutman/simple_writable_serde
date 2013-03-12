@@ -11,7 +11,6 @@ drop table if exists primative_test
 create table primative_test (a_varint tinyint, a_short smallint, a_int int, a_long bigint, a_float float, a_double double, a_bool boolean, a_text string)
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
---INPUTFORMAT 'org.apache.hadoop.mapreduce.lib.input.RawBytesSequenceFileInputFormat'
 INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 -- location '/user/ntroutm/primative_test'
