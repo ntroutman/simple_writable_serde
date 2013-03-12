@@ -92,6 +92,67 @@ public class CreateSequenceFiles {
 		}
 	}
 
+	public static class SimpleStructTestWritable implements Writable {
+		private int val;
+
+		public SimpleStructTestWritable(int val) {
+			this.val = val;
+		}
+
+		@Override
+		public void write(DataOutput out) throws IOException {
+			WritableUtils.writeVInt(out, val);
+			Text.writeString(out, "txt" + val);
+		}
+
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			// TODO Auto-generated method stub
+			throw new RuntimeException("Not implemented yet.");
+		}
+	}
+
+	public static class FullTestWritable implements Writable {
+		private int val;
+
+		public FullTestWritable(int val) {
+			this.val = val;
+		}
+
+		@Override
+		public void write(DataOutput out) throws IOException {
+			// write out a couple columns
+			Text.writeString(out, "col" + val);
+			out.writeInt(val);
+
+			// write out a list with simple structs as items
+			WritableUtils.writeVInt(out, 5);
+			for (int i = 0; i < 5; i++) {
+				out.writeInt(val * i);
+				out.writeInt(-val * i);
+			}
+			// write out a struct with a two primative columns and one map
+			Text.writeString(out, "f1_" + val);
+			out.writeDouble(val * 1.5d);
+			// map
+			WritableUtils.writeVInt(out, 3);
+			for (int i = 0; i < 3; i++) {
+				WritableUtils.writeVInt(out, 100 + val);
+				WritableUtils.writeVInt(out, 3);
+				for (int j = 1; j <= 3; j++) {
+					Text.writeString(out, "inner" + j);
+					out.writeInt(j * j);
+				}
+			}
+		}
+
+		@Override
+		public void readFields(DataInput in) throws IOException {
+			// TODO Auto-generated method stub
+			throw new RuntimeException("Not implemented yet.");
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		Writer writer;
 
@@ -122,6 +183,18 @@ public class CreateSequenceFiles {
 		writer = createWriter(args[0], "simple_map_test.seq", SimpleMapTestWritable.class);
 		for (int i = 1; i <= 10; i++) {
 			writer.append(NullWritable.get(), new SimpleMapTestWritable(i));
+		}
+		writer.close();
+
+		writer = createWriter(args[0], "simple_struct_test.seq", SimpleStructTestWritable.class);
+		for (int i = 1; i <= 10; i++) {
+			writer.append(NullWritable.get(), new SimpleStructTestWritable(i));
+		}
+		writer.close();
+
+		writer = createWriter(args[0], "full_test.seq", FullTestWritable.class);
+		for (int i = 1; i <= 10; i++) {
+			writer.append(NullWritable.get(), new FullTestWritable(i));
 		}
 		writer.close();
 	}

@@ -3,3 +3,4 @@
 metastore_db
 target
 .settings
+derby.log
