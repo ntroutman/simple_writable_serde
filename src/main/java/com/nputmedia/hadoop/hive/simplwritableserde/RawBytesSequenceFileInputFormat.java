@@ -36,10 +36,10 @@ import org.apache.hadoop.mapred.SequenceFileInputFormat;
 /**
  * InputFormat reading keys, values from SequenceFiles in binary (raw) format.
  */
-public class SequenceFileAsBinaryInputFormat extends
+public class RawBytesSequenceFileInputFormat extends
 		SequenceFileInputFormat<BytesWritable, BytesWritable> {
 
-	public SequenceFileAsBinaryInputFormat() {
+	public RawBytesSequenceFileInputFormat() {
 		super();
 		debug("new input format");
 	}

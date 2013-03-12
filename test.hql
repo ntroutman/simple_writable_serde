@@ -11,8 +11,8 @@ drop table if exists primative_test
 create table primative_test (a_varint tinyint, a_short smallint, a_int int, a_long bigint, a_float float, a_double double, a_bool boolean, a_text string)
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
---INPUTFORMAT 'org.apache.hadoop.mapreduce.lib.input.SequenceFileAsBinaryInputFormat'
-INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.SequenceFileAsBinaryInputFormat'
+--INPUTFORMAT 'org.apache.hadoop.mapreduce.lib.input.RawBytesSequenceFileInputFormat'
+INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 -- location '/user/ntroutm/primative_test'
 ;
@@ -34,7 +34,7 @@ drop table if exists list_int_test
 create table list_int_test (int_list array<int>)
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
-INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.SequenceFileAsBinaryInputFormat'
+INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 ;
 
@@ -54,7 +54,7 @@ drop table if exists simple_map_test
 create table simple_map_test (simple_map map<string, int>)
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
-INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.SequenceFileAsBinaryInputFormat'
+INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 ;
 
@@ -74,7 +74,7 @@ drop table if exists simple_struct_test
 create table simple_struct_test (simple_struct struct<x:tinyint, txt:string>)
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
-INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.SequenceFileAsBinaryInputFormat'
+INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 ;
 
@@ -99,7 +99,7 @@ create table full_test (
 )
 ROW FORMAT SERDE 'com.nputmedia.hadoop.hive.simplwritableserde.SimpleWritableSerde'
 stored as 
-INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.SequenceFileAsBinaryInputFormat'
+INPUTFORMAT 'com.nputmedia.hadoop.hive.simplwritableserde.RawBytesSequenceFileInputFormat'
 OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat'
 ;
 
